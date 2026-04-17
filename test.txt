@@ -1,0 +1,11 @@
+mcq "Question", B
+    text "Texte"
+    A "Réponse A"
+    B "Réponse B"
+    C "Réponse C"
+    D "Réponse D"
+page "ye"
+    text "ey"
+    text "WOWOWO"
+    text "# hein?"
+    image "https://media.discordapp.net/attachments/410790077158129667/1494766279465369731/IMG_1564.png?ex=69e3cd14&is=69e27b94&hm=a66612bd1f214986af7be27b417745e84a87b7cd987e255290966ab660fa1fa4&=&format=webp&quality=lossless&width=1256&height=1492"

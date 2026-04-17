@@ -1,0 +1,691 @@
+import curses
+import os
+import time
+import glob
+import webbrowser
+import random
+import json
+import re
+from datetime import datetime
+
+# --- CONFIGURATION ET SAUVEGARDE ---
+CONFIG_FILE = ".settings.config"
+SETTINGS = {
+    "username": "User",
+    "images_enabled": True,
+    "lang": "FR",
+    "terminer_mode": "ASK",
+    "theme": "DEFAULT",
+    "character": "Default"
+}
+
+def save_settings():
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(SETTINGS, f)
+
+def load_settings():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                SETTINGS.update(json.load(f))
+        except:
+            pass
+
+# --- PHRASES ET TEXTES ---
+NEXT_PHRASES = ["Ouep", "Yep", "Okay", "D'accord", "Uh huh?", "C'est noté", "Suivant", "Allez !"]
+
+# Personnages et leurs phrases personnalisées
+CHARACTER_PHRASES = {
+    "Default": {
+        "PERFECT": ["C'était divin...", "Un sans-faute magistral...", "C'est... l'excellence incarnée.", "Les profs pleurent de joie."],
+        "GOOD": ["C'était plutôt juteux...", "Solide. Très solide.", "Les profs hochent la tête avec respect...", "Performance de haut vol."],
+        "OK": ["C'était pas si mal...", "Moyen... On a vu pire.", "Une performance... existante.", "C'est passé, mais de justesse..."],
+        "BAD": ["C'était pas fameux...", "Aïe, ça pique un peu...", "Les feuilles tremblent d'effroi...", "On va dire que c'était un échauffement..."]
+    },
+    "Oz": {
+        "PERFECT": ["Yeah! You're awesome!", "Perfect! You're way better than me....", "Wow. Okay, WOW.", "WHAAAAAATTTT?"],
+        "GOOD": ["Wonderful! Hehe, better than me.", "Well done!!", "ooooooooooh,,,,", "Heck yeah!"],
+        "OK": ["Not bad at all!... (who am i to judge them...)", "Hey, that's pretty decent!", "Not lots of problem so far!... It's pretty good- i think?", "It's working, I think."],
+        "BAD": ["Ouch... yeah-...", "Don't give up just yet!!", "Not... good... Sorry...", "Hm... Maybe try again...?"]
+    },
+    "Doug": {
+        "PERFECT": ["WOW, that's PEAK.", "OMAGAHHHH!!", "PERFECCCTTTTTTTT!!", "Wow, okay, that's actually REALLY good."],
+        "GOOD": ["Well done! It's working juuuust fine!", "Cool ! Keep goin'!", "Impressive! Hehe."],
+        "OK": ["Oh, well... it could be worse.", "Not GOOD, but not BAD...", "You can do better, c'mon!", "Yeah, you're on the way dude!!"],
+        "BAD": ["Ah, eh, oh...", "...Ah.", "I'm SURE that with a bit of studying you'll manage JUUUUUUST fine.", "Arfgh,,..."]
+    },
+    "April": {
+        "PERFECT": ["Perfect! Honk honk.","April looks at you with dead eyes and a big smile."],
+        "GOOD": ["It's okay level!"],
+        "OK": ["Meh."],
+        "BAD": ["Boooringggg-...", "Try again!", "Ouch, better luck next time!", "Have you tried studying? :))))"]
+    },
+    "Moss": {
+        "PERFECT": ["LOOK AT THE LIGHTS...", "Muehehehehe!", "Gracious."],
+        "GOOD": ["Hehehe, almost at my level~", "Wowsie, that's good."],
+        "OK": ["Not baaaaaaddd-", "Okay i'm SURE you can make this better.", "Nope. Yes? Yes.", "Accepteable."],
+        "BAD": ["Ah, uh-- did you mean to do that?", "Huh?", "Booooringggggg...", "I mean..."]
+    },
+    "Stu": {
+        "PERFECT": ["Brooo... That was like... Sooooo gooood-...", "Wow... Woooooooaahhh-...", "...Am i high again or-", "24/7 access to my pot if you teach me how to do that."],
+        "GOOD": ["Reallllyyyyy good.", "Woahh, numbers...", "Seexyyyyy-...", "Stu looks at you with very suggestive eyes."],
+        "OK": ["Wow... You're like... a good student...", "Eh? Uh-", "I ain't judging."],
+        "BAD": ["Stu seems unimpressed but comprehensive.", "Not so good dude...", "C'monnn, you can do better than that, seriously, you're just pretendingggg-...", "Noooooooo- okay now let's do something else, k?"]
+    },
+    "Cinnamon": {
+        "PERFECT": ["Wondeful!", "Seems very relaxing, maybe i should give it a try.", "Woooow, okay-", "*sigh* amazing..."],
+        "GOOD": ["Good! Nothing to say.", "Amazing!", "Cinnamon squeaks hapilly.", "You're awesome!"],
+        "OK": ["Cinnamon takes notes and drew a flower next to your grade.", "Its's okay!", "Mhm.", "Good!"],
+        "BAD": ["Oh.. not good... do you need my notes?", "Ooh, oh. oh...", "I mean...", "Don't worry, it's no big deal."]
+    },
+    "Omen": {
+        "PERFECT": ["."],
+        "GOOD": ["."],
+        "OK": ["."],
+        "BAD": ["Kill yourself."]
+    },
+    "Lester": {
+        "PERFECT": ["."],
+        "GOOD": ["."],
+        "OK": ["."],
+        "BAD": ["."]
+    }
+}
+
+STRINGS = {
+    "FR": {
+        "welcome": "Bonjour {} ! Appuie sur [ENTRÉE] pour commencer.",
+        "menu_title": "=== MENU PRINCIPAL ===",
+        "menu_help": "[↑/↓] Naviguer  [Entrée] Ouvrir  [R] Recharger  [C] Scoreboard  [S] Paramètres  [Q] Quitter",
+        "no_files": "Aucune fiche trouvée.",
+        "scoreboard_title": "=== SCOREBOARD : {} ===",
+        "empty_scoreboard": "Aucun score pour le moment.",
+        "submit_results": "Terminer et envoyer les résultats ?",
+        "yes": "Oui",
+        "no": "Non (Retour)",
+        "settings_title": "=== PARAMÈTRES ===",
+        "settings_help": "[↑/↓] Choisir  [←/→] Modifier  [Entrée] Sauver & Quitter",
+        "opt_user": "Nom d'utilisateur",
+        "opt_lang": "Langue",
+        "opt_imag": "Images",
+        "opt_term": "Terminer",
+        "opt_them": "Thème",
+        "opt_char": "Personnage",
+        "fiche_help": "[←] Précédent  [→/Entrée] Suivant  [↑/↓] Choisir  [I] Image  [Q] Quitter",
+    },
+    "EN": {
+        "welcome": "Hello {}! Press [ENTER].",
+        "menu_title": "=== MAIN MENU ===",
+        "menu_help": "[↑/↓] Navigate  [Enter] Open  [R] Reload  [C] Scoreboard  [S] Settings  [Q] Quit",
+        "no_files": "No flashcards found.",
+        "scoreboard_title": "=== SCOREBOARD: {} ===",
+        "empty_scoreboard": "No scores yet.",
+        "submit_results": "Finish and submit results?",
+        "yes": "Yes",
+        "no": "No (Back)",
+        "settings_title": "=== SETTINGS ===",
+        "settings_help": "[↑/↓] Choose  [←/→] Change  [Enter] Save & Quit",
+        "opt_user": "Username",
+        "opt_lang": "Language",
+        "opt_imag": "Images",
+        "opt_term": "Finish mode",
+        "opt_them": "Theme",
+        "opt_char": "Character",
+        "fiche_help": "[←] Previous  [→/Enter] Next  [↑/↓] Choose  [I] Image  [Q] Quit",
+    }
+}
+
+def get_str(key, *args):
+    lang_dict = STRINGS.get(SETTINGS["lang"], STRINGS["FR"])
+    return lang_dict.get(key, key).format(*args)
+
+# --- SYSTÈME DE THÈMES ---
+THEMES_DIR = "themes"
+
+BUILTIN_THEMES = {
+    "DEFAULT": {
+        "fg": curses.COLOR_WHITE,
+        "bg": curses.COLOR_BLACK,
+        "accent": curses.COLOR_CYAN,
+        "select_bg": curses.COLOR_CYAN,
+        "select_fg": curses.COLOR_BLACK,
+    },
+    "ATLAS": {
+        "fg": curses.COLOR_WHITE,
+        "bg": 12,
+        "accent": 13,
+        "select_bg": curses.COLOR_RED,
+        "select_fg": curses.COLOR_WHITE,
+        "custom": {12: (0, 0, 130), 13: (0, 1000, 1000)}
+    },
+    "TRANS RIGHTS!": {
+        "fg": curses.COLOR_WHITE,
+        "bg": curses.COLOR_BLACK,
+        "accent": 11,
+        "select_bg": 11,
+        "select_fg": curses.COLOR_BLACK,
+        "custom": {10: (356, 807, 980), 11: (960, 662, 721)}
+    },
+    "NATURE": {
+        "fg": curses.COLOR_GREEN,
+        "bg": 14,
+        "accent": curses.COLOR_YELLOW,
+        "select_bg": curses.COLOR_YELLOW,
+        "select_fg": curses.COLOR_BLACK,
+        "custom": {14: (0, 300, 0)}
+    },
+    "MENTHE": {
+        "fg": curses.COLOR_CYAN,
+        "bg": curses.COLOR_BLACK,
+        "accent": curses.COLOR_GREEN,
+        "select_bg": curses.COLOR_GREEN,
+        "select_fg": curses.COLOR_BLACK,
+    },
+    "FRAISE": {
+        "fg": curses.COLOR_RED,
+        "bg": curses.COLOR_BLACK,
+        "accent": curses.COLOR_MAGENTA,
+        "select_bg": curses.COLOR_MAGENTA,
+        "select_fg": curses.COLOR_WHITE,
+    },
+    "BANANE": {
+        "fg": curses.COLOR_YELLOW,
+        "bg": curses.COLOR_BLACK,
+        "accent": curses.COLOR_WHITE,
+        "select_bg": curses.COLOR_WHITE,
+        "select_fg": curses.COLOR_BLACK,
+    },
+    "CACAHUÈTE": {
+        "fg": curses.COLOR_YELLOW,
+        "bg": 8,
+        "accent": curses.COLOR_RED,
+        "select_bg": curses.COLOR_RED,
+        "select_fg": curses.COLOR_WHITE,
+        "custom": {8: (600, 300, 0)}
+    },
+    "RAISIN": {
+        "fg": curses.COLOR_MAGENTA,
+        "bg": curses.COLOR_BLACK,
+        "accent": curses.COLOR_CYAN,
+        "select_bg": curses.COLOR_CYAN,
+        "select_fg": curses.COLOR_BLACK,
+    },
+    "MELON": {
+        "fg": curses.COLOR_GREEN,
+        "bg": curses.COLOR_BLACK,
+        "accent": curses.COLOR_YELLOW,
+        "select_bg": curses.COLOR_YELLOW,
+        "select_fg": curses.COLOR_BLACK,
+    },
+    "ORCA": {
+        "fg": curses.COLOR_WHITE,
+        "bg": 15,
+        "accent": curses.COLOR_CYAN,
+        "select_bg": curses.COLOR_CYAN,
+        "select_fg": curses.COLOR_BLACK,
+        "custom": {15: (0, 0, 100)}
+    },
+    "SHORK": {
+        "fg": curses.COLOR_CYAN,
+        "bg": 16,
+        "accent": curses.COLOR_WHITE,
+        "select_bg": curses.COLOR_BLACK,
+        "select_fg": curses.COLOR_CYAN,
+        "custom": {16: (400, 800, 1000)}
+    },
+    "OZ": {
+        "fg": curses.COLOR_YELLOW,
+        "bg": curses.COLOR_BLACK,
+        "accent": curses.COLOR_WHITE,
+        "select_bg": curses.COLOR_WHITE,
+        "select_fg": curses.COLOR_BLACK,
+    },
+    "DOUG": {
+        "fg": curses.COLOR_BLACK,
+        "bg": 17,
+        "accent": curses.COLOR_GREEN,
+        "select_bg": curses.COLOR_BLACK,
+        "select_fg": 47,
+        "custom": {17: (600, 1000, 600)}
+    },
+    "APRIL": {
+        "fg": curses.COLOR_WHITE,
+        "bg": 18,
+        "accent": 19,
+        "select_bg": 20,
+        "select_fg": curses.COLOR_BLACK,
+        "custom": {18: (1000, 600, 800), 19: (400, 600, 1000), 20: (1000, 1000, 400)}
+    },
+    "MOSS MANN": {
+        "fg": curses.COLOR_WHITE,
+        "bg": curses.COLOR_BLACK,
+        "accent": curses.COLOR_RED,
+        "select_bg": curses.COLOR_RED,
+        "select_fg": curses.COLOR_WHITE,
+        "custom": {21: (800, 200, 100)}
+    },
+    "STU": {
+        "fg": curses.COLOR_YELLOW,
+        "bg": 22,
+        "accent": curses.COLOR_GREEN,
+        "select_bg": curses.COLOR_GREEN,
+        "select_fg": curses.COLOR_BLACK,
+        "custom": {22: (0, 200, 0)}
+    },
+    "CINNAMON": {
+        "fg": curses.COLOR_YELLOW,
+        "bg": 23,
+        "accent": curses.COLOR_WHITE,
+        "select_bg": curses.COLOR_WHITE,
+        "select_fg": curses.COLOR_BLACK,
+        "custom": {23: (800, 500, 200)}
+    },
+    "OMEN": {
+        "fg": curses.COLOR_WHITE,
+        "bg": 24,
+        "accent": 25,
+        "select_bg": 25,
+        "select_fg": curses.COLOR_WHITE,
+        "custom": {24: (300, 300, 300), 25: (600, 300, 800)}
+    },
+    "CALCULESTER": {
+        "fg": curses.COLOR_GREEN,
+        "bg": curses.COLOR_BLACK,
+        "accent": curses.COLOR_GREEN,
+        "select_bg": curses.COLOR_GREEN,
+        "select_fg": curses.COLOR_BLACK,
+    },
+}
+
+def load_external_themes():
+    themes = {}
+    if not os.path.exists(THEMES_DIR):
+        os.makedirs(THEMES_DIR, exist_ok=True)
+        example = {
+            "fg": curses.COLOR_YELLOW,
+            "bg": curses.COLOR_BLUE,
+            "accent": curses.COLOR_CYAN,
+            "select_bg": curses.COLOR_RED,
+            "select_fg": curses.COLOR_WHITE
+        }
+        with open(os.path.join(THEMES_DIR, "example.json"), "w", encoding="utf-8") as f:
+            json.dump(example, f, indent=2)
+    for filepath in glob.glob(os.path.join(THEMES_DIR, "*.json")):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                name = os.path.splitext(os.path.basename(filepath))[0]
+                themes[name] = data
+        except:
+            pass
+    return themes
+
+def get_all_themes():
+    external = load_external_themes()
+    all_themes = {}
+    all_themes.update(BUILTIN_THEMES)
+    all_themes.update(external)
+    return list(all_themes.keys()), all_themes
+
+def init_custom_colors(theme_def):
+    if not curses.can_change_color():
+        return False
+    custom = theme_def.get("custom", {})
+    for idx, rgb in custom.items():
+        if isinstance(idx, int) and len(rgb) == 3:
+            curses.init_color(idx, rgb[0], rgb[1], rgb[2])
+    return bool(custom)
+
+def apply_theme():
+    theme_name = SETTINGS.get("theme", "DEFAULT")
+    _, all_themes = get_all_themes()
+    theme = all_themes.get(theme_name, BUILTIN_THEMES["DEFAULT"])
+    init_custom_colors(theme)
+    bg = theme.get("bg", curses.COLOR_BLACK)
+    fg = theme.get("fg", curses.COLOR_WHITE)
+    accent = theme.get("accent", curses.COLOR_CYAN)
+    select_bg = theme.get("select_bg", curses.COLOR_CYAN)
+    select_fg = theme.get("select_fg", curses.COLOR_BLACK)
+    curses.init_pair(1, fg, bg)
+    curses.init_pair(2, accent, bg)
+    curses.init_pair(3, select_fg, select_bg)
+
+# --- RENDU MARKDOWN ---
+def add_markdown_str(stdscr, y, x, text):
+    title_match = re.match(r'^(#{1,6})\s+(.*)', text)
+    if title_match:
+        text = title_match.group(2)
+        base_pair = curses.color_pair(2)
+        base_attr = curses.A_BOLD
+    else:
+        base_pair = curses.color_pair(1)
+        base_attr = 0
+
+    parts = re.split(r'(\*\*|_|`)', text)
+    curr_attr = curses.A_NORMAL
+    pos_x = x
+    for part in parts:
+        if part == '**':
+            curr_attr ^= curses.A_BOLD
+        elif part == '_':
+            curr_attr ^= curses.A_ITALIC if hasattr(curses, 'A_ITALIC') else curses.A_UNDERLINE
+        elif part == '`':
+            curr_attr ^= curses.A_REVERSE
+        elif part:
+            stdscr.addstr(y, pos_x, part, curr_attr | base_attr | base_pair)
+            pos_x += len(part)
+
+# --- PARSEUR ---
+def parse_fiche(filepath):
+    pages = []
+    current_page = None
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+    except:
+        return []
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith('page '):
+            if current_page:
+                pages.append(current_page)
+            title = line.split('"', 2)[1] if '"' in line else "Page"
+            current_page = {"type": "content", "title": title, "elements": []}
+        elif line.startswith('tf '):
+            if current_page:
+                pages.append(current_page)
+            parts = line.split('"', 2)
+            title = parts[1]
+            last = parts[-1].lower()
+            correct = 0 if "true" in last else 1
+            current_page = {"type": "tf", "title": title, "options": ["VRAI", "FAUX"], "correct": correct, "user_answer": 0, "elements": []}
+        elif line.startswith('mcq '):
+            if current_page:
+                pages.append(current_page)
+            parts = line.split('"', 2)
+            title = parts[1]
+            correct_letter = parts[-1].replace(',', '').strip().upper()
+            correct_index = ord(correct_letter) - 65
+            current_page = {"type": "mcq", "title": title, "options": [], "correct": correct_index, "user_answer": 0, "elements": []}
+        elif line.startswith('text '):
+            if current_page:
+                content = line.split('"', 2)[1] if '"' in line else line[5:]
+                current_page["elements"].append(("text", content))
+        elif line.startswith('image '):
+            if current_page:
+                path = line.split('"', 2)[1] if '"' in line else line[6:]
+                current_page["elements"].append(("image", path))
+        elif line.startswith('subtext '):
+            if current_page:
+                content = line.split('"', 2)[1] if '"' in line else line[8:]
+                current_page["elements"].append(("subtext", content))
+        elif current_page and current_page["type"] == "mcq":
+            m = re.match(r'^([A-Z])\s*:?\s*"(.*)"$', line)
+            if m:
+                letter, answer = m.groups()
+                current_page["options"].append(f"{letter} : {answer}")
+    if current_page:
+        pages.append(current_page)
+    return pages
+
+# --- ÉCRAN D'ACCUEIL ---
+def draw_ascii_title(stdscr):
+    h, w = stdscr.getmaxyx()
+    art = [r"   _________       __         .__   ",r"  /   _____/ ____ |  | ____ __|  |  ",r"  \_____  \ /  _ \|  |/ /  |  \  |  ",r"  /        (  <_> )    <|  |  /  |__",r" /_______  /\____/|__|_ \____/|____/",r"         \/            \/           "]
+    stdscr.clear()
+    for i, line in enumerate(art):
+        if h > 15:
+            stdscr.addstr(h//2 - 6 + i, max(0, (w - len(line))//2), line, curses.color_pair(2) | curses.A_BOLD)
+    msg = get_str("welcome", SETTINGS["username"])
+    stdscr.addstr(h//2 + 2, max(0, (w - len(msg))//2), msg)
+    stdscr.refresh()
+    while stdscr.getch() != 10:
+        pass
+
+# --- MENU PARAMÈTRES ---
+def settings_menu(stdscr):
+    idx = 0
+    options = ["username", "lang", "images_enabled", "terminer_mode", "theme", "character"]
+    term_modes = ["ASK", "AUTO", "NEVER"]
+    characters = list(CHARACTER_PHRASES.keys())
+    def get_theme_list():
+        theme_names, _ = get_all_themes()
+        return theme_names
+    while True:
+        theme_list = get_theme_list()
+        stdscr.bkgd(' ', curses.color_pair(1))
+        stdscr.clear()
+        stdscr.addstr(2, 4, get_str("settings_title"), curses.A_BOLD | curses.color_pair(2))
+        for i, key in enumerate(options):
+            label = get_str(f"opt_{key[:4]}")
+            val = SETTINGS[key]
+            if key == "images_enabled":
+                val = "ON" if val else "OFF"
+            text = f"{label} : < {val} >"
+            if i == idx:
+                stdscr.addstr(5+i, 6, f"> {text}", curses.A_REVERSE)
+            else:
+                stdscr.addstr(5+i, 6, f"  {text}")
+        stdscr.addstr(15, 4, get_str("settings_help"), curses.A_DIM)
+        k = stdscr.getch()
+        if k == curses.KEY_UP:
+            idx = (idx - 1) % len(options)
+        elif k == curses.KEY_DOWN:
+            idx = (idx + 1) % len(options)
+        elif k in [curses.KEY_LEFT, curses.KEY_RIGHT]:
+            key_name = options[idx]
+            delta = 1 if k == curses.KEY_RIGHT else -1
+            if key_name == "username":
+                curses.echo()
+                stdscr.addstr(18, 6, "Nom: ")
+                new_name = stdscr.getstr(18, 15).decode('utf-8')
+                if new_name:
+                    SETTINGS[key_name] = new_name
+                curses.noecho()
+            elif key_name == "lang":
+                SETTINGS[key_name] = "EN" if SETTINGS[key_name] == "FR" else "FR"
+            elif key_name == "images_enabled":
+                SETTINGS[key_name] = not SETTINGS[key_name]
+            elif key_name == "terminer_mode":
+                current = SETTINGS[key_name]
+                idx_mode = term_modes.index(current)
+                new_idx = (idx_mode + delta) % len(term_modes)
+                SETTINGS[key_name] = term_modes[new_idx]
+            elif key_name == "theme":
+                current = SETTINGS[key_name]
+                if current not in theme_list and theme_list:
+                    current = theme_list[0]
+                idx_theme = theme_list.index(current)
+                new_idx = (idx_theme + delta) % len(theme_list)
+                SETTINGS[key_name] = theme_list[new_idx]
+                apply_theme()
+            elif key_name == "character":
+                current = SETTINGS[key_name]
+                idx_char = characters.index(current) if current in characters else 0
+                new_idx = (idx_char + delta) % len(characters)
+                SETTINGS[key_name] = characters[new_idx]
+        elif k == 10:
+            break
+    save_settings()
+
+# --- LECTURE D'UNE FICHE ---
+def run_fiche(stdscr, filepath):
+    pages = parse_fiche(filepath)
+    if not pages:
+        return
+    curr = 0
+    start_time = time.time()
+    random_phrase = random.choice(NEXT_PHRASES)
+
+    while curr <= len(pages):
+        stdscr.clear()
+        # Écran de fin
+        if curr == len(pages):
+            if SETTINGS["terminer_mode"] == "NEVER":
+                break
+            if SETTINGS["terminer_mode"] == "ASK":
+                stdscr.addstr(5, 5, get_str("submit_results"), curses.A_BOLD)
+                opts = [get_str("yes"), get_str("no")]
+                sel = 0
+                while True:
+                    for i, o in enumerate(opts):
+                        attr = curses.A_REVERSE if i == sel else 0
+                        stdscr.addstr(7+i, 7, f"> {o}" if i == sel else f"  {o}", attr)
+                    k = stdscr.getch()
+                    if k == curses.KEY_UP:
+                        sel = 0
+                    elif k == curses.KEY_DOWN:
+                        sel = 1
+                    elif k == 10:
+                        break
+                if sel == 1:
+                    curr -= 1
+                    continue
+            # Calcul du score
+            qs = [p for p in pages if p["type"] in ["tf", "mcq"]]
+            score = sum(1 for p in qs if p["user_answer"] == p["correct"])
+            total = len(qs)
+            elapsed = round(time.time() - start_time)
+            ratio = score / total if total > 0 else 1.0
+            if ratio == 1.0:
+                rank = "PERFECT"
+            elif ratio >= 0.8:
+                rank = "GOOD"
+            elif ratio >= 0.5:
+                rank = "OK"
+            else:
+                rank = "BAD"
+            
+            # Choisir les phrases du personnage
+            char_phrases = CHARACTER_PHRASES.get(SETTINGS["character"], CHARACTER_PHRASES["Default"])
+            judge_sentence = random.choice(char_phrases[rank])
+            
+            stdscr.clear()
+            stdscr.addstr(3, 5, f"--- RESULTS : {os.path.basename(filepath)} ---", curses.A_BOLD | curses.color_pair(2))
+            stdscr.addstr(6, 7, f"SCORE  : {score} / {total}", curses.A_BOLD)
+            stdscr.addstr(7, 7, f"TIME  : {elapsed} secondes")
+            stdscr.addstr(9, 7, f"NOTES :", curses.A_DIM)
+            stdscr.addstr(10, 9, f"\"{judge_sentence}\"", curses.A_ITALIC | curses.color_pair(2))
+            stdscr.addstr(12, 7, f"RANG   : {rank}", curses.A_REVERSE)
+            if total > 0:
+                sf = filepath.rsplit('.', 1)[0] + "_scoreboard.txt"
+                with open(sf, 'a', encoding='utf-8') as f:
+                    f.write(f"{datetime.now().strftime('%d/%m %H:%M')} | {SETTINGS['username']} | {score}/{total} | {elapsed}s\n")
+            stdscr.getch()
+            break
+
+        # Affichage d'une page
+        page = pages[curr]
+        stdscr.addstr(2, 2, f"{page['title']} ({curr+1}/{len(pages)})", curses.A_BOLD | curses.color_pair(2))
+        y = 4
+        for typ, content in page["elements"]:
+            if typ == "text":
+                add_markdown_str(stdscr, y, 4, content)
+                y += 2
+            elif typ == "image" and SETTINGS["images_enabled"]:
+                stdscr.addstr(y, 4, f"[ IMAGE : {content} - Touche 'I' ]", curses.color_pair(2))
+                y += 2
+            elif typ == "subtext":
+                add_markdown_str(stdscr, y-1, 6, f"~ {content}")
+                y += 1
+
+        if page["type"] in ["tf", "mcq"]:
+            for i, opt in enumerate(page["options"]):
+                if i == page["user_answer"]:
+                    attr = curses.color_pair(3) | curses.A_BOLD
+                    prefix = "▶ "
+                else:
+                    attr = curses.color_pair(1)
+                    prefix = "  "
+                stdscr.addstr(y + i, 6, f"{prefix}{opt}", attr)
+            y += len(page["options"]) + 1
+        else:
+            stdscr.addstr(y + 1, 4, f"[ {random_phrase} ]", curses.A_REVERSE)
+
+        # Barre d'aide
+        help_text = get_str("fiche_help")
+        h, w = stdscr.getmaxyx()
+        if h > 2:
+            stdscr.addstr(h-2, 2, help_text, curses.A_DIM)
+
+        k = stdscr.getch()
+        if k in [ord('q'), ord('Q')]:
+            break
+        elif k in [curses.KEY_RIGHT, 10]:
+            curr += 1
+            random_phrase = random.choice(NEXT_PHRASES)
+        elif k == curses.KEY_LEFT and curr > 0:
+            curr -= 1
+            random_phrase = random.choice(NEXT_PHRASES)
+        elif k == ord('i') and SETTINGS["images_enabled"]:
+            for typ, path in page["elements"]:
+                if typ == "image":
+                    webbrowser.open(path)
+        elif page["type"] in ["tf", "mcq"]:
+            if k == curses.KEY_UP:
+                page["user_answer"] = max(0, page["user_answer"] - 1)
+            elif k == curses.KEY_DOWN:
+                page["user_answer"] = min(len(page["options"]) - 1, page["user_answer"] + 1)
+
+# --- MENU PRINCIPAL ---
+def main_menu(stdscr):
+    load_settings()
+    curses.curs_set(0)
+    curses.start_color()
+    apply_theme()
+    draw_ascii_title(stdscr)
+
+    def scan_files():
+        return [f for f in (glob.glob("*.txt") + glob.glob("*.fiche")) if not f.endswith("scoreboard.txt")]
+
+    files = scan_files()
+    sel = 0
+
+    while True:
+        stdscr.bkgd(' ', curses.color_pair(1))
+        stdscr.clear()
+        stdscr.addstr(2, 4, get_str("menu_title"), curses.A_BOLD | curses.color_pair(2))
+        if not files:
+            stdscr.addstr(5, 6, get_str("no_files"))
+        for i, f in enumerate(files):
+            if i == sel:
+                stdscr.addstr(5 + i, 6, f"> {f}", curses.A_REVERSE)
+            else:
+                stdscr.addstr(5 + i, 6, f"  {f}")
+        stdscr.addstr(curses.LINES-2, 4, get_str("menu_help"), curses.A_DIM)
+        k = stdscr.getch()
+        if k == curses.KEY_UP:
+            if files:
+                sel = (sel - 1) % len(files)
+        elif k == curses.KEY_DOWN:
+            if files:
+                sel = (sel + 1) % len(files)
+        elif k == 10 and files:
+            run_fiche(stdscr, files[sel])
+            stdscr.clear()
+            stdscr.refresh()
+        elif k in [ord('r'), ord('R')]:
+            files = scan_files()
+            sel = 0
+        elif k in [ord('s'), ord('S')]:
+            settings_menu(stdscr)
+            apply_theme()
+        elif k in [ord('c'), ord('C')] and files:
+            stdscr.clear()
+            sf = files[sel].rsplit('.', 1)[0] + "_scoreboard.txt"
+            if os.path.exists(sf):
+                with open(sf, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                for i, line in enumerate(lines[-15:]):
+                    stdscr.addstr(2 + i, 2, line.strip())
+            else:
+                stdscr.addstr(2, 2, get_str("empty_scoreboard"))
+            stdscr.getch()
+        elif k in [ord('q'), ord('Q')]:
+            break
+
+if __name__ == "__main__":
+    curses.wrapper(main_menu)
