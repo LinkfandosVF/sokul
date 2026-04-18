@@ -705,6 +705,41 @@ def run_fiche(stdscr, filepath):
             elif k == curses.KEY_DOWN:
                 page["user_answer"] = min(len(page["options"]) - 1, page["user_answer"] + 1)
 
+def get_dir_content(current_path, root_path):
+    """Récupère les dossiers et fichiers valides, avec gestion du '..'"""
+    try:
+        all_entries = os.listdir(current_path)
+    except:
+        return []
+
+    dirs = []
+    files = []
+    
+    # Filtrage des dossiers à ignorer
+    ignore = ["images", "themes", "__pycache__", ".git", ".settings.config"]
+
+    for e in all_entries:
+        if e.lower() in ignore or e.startswith('.'):
+            continue
+            
+        full_p = os.path.join(current_path, e)
+        if os.path.isdir(full_p):
+            dirs.append(e + "/")
+        elif e.endswith(".txt") or e.endswith(".fiche"):
+            if not e.endswith("scoreboard.txt"):
+                files.append(e)
+
+    dirs.sort()
+    files.sort()
+    
+    final_list = dirs + files
+    
+    # Ajoute le retour en arrière si on n'est pas à la racine du script
+    if os.path.abspath(current_path) != os.path.abspath(root_path):
+        final_list.insert(0, "..")
+        
+    return final_list
+
 def main_menu(stdscr):
     load_settings()
     curses.curs_set(0)
@@ -713,54 +748,96 @@ def main_menu(stdscr):
     check_terminal_size(stdscr)
     draw_ascii_title(stdscr)
 
-    def scan_files():
-        return [f for f in (glob.glob("*.txt") + glob.glob("*.fiche")) if not f.endswith("scoreboard.txt")]
-
-    files = scan_files()
+    root_dir = os.getcwd()
+    current_path = root_dir
+    items = get_dir_content(current_path, root_dir)
+    
     sel = 0
+    scroll_offset = 0
 
     while True:
+        h, w = stdscr.getmaxyx()
+        max_visible = h - 10 # Espace réservé pour titre et aide
+        
         stdscr.bkgd(' ', curses.color_pair(1))
         stdscr.clear()
-        stdscr.addstr(2, 4, get_str("menu_title"), curses.A_BOLD | curses.color_pair(2))
-        if not files:
+        
+        # Affichage du chemin actuel pour s'y retrouver
+        rel_path = os.path.relpath(current_path, root_dir)
+        display_path = "Racine" if rel_path == "." else rel_path
+        stdscr.addstr(2, 4, f"{get_str('menu_title')} ({display_path})", curses.A_BOLD | curses.color_pair(2))
+
+        if not items:
             stdscr.addstr(5, 6, get_str("no_files"), curses.color_pair(4))
-        for i, f in enumerate(files):
-            if i == sel:
-                stdscr.addstr(5 + i, 6, f"> {f}", curses.color_pair(3) | curses.A_BOLD)
-            else:
-                stdscr.addstr(5 + i, 6, f"  {f}", curses.color_pair(4))
-        stdscr.addstr(curses.LINES-2, 4, get_str("menu_help"), curses.A_DIM | curses.color_pair(4))
+        else:
+            # Gestion du scroll : ajuster l'offset selon la sélection
+            if sel < scroll_offset:
+                scroll_offset = sel
+            elif sel >= scroll_offset + max_visible:
+                scroll_offset = sel - max_visible + 1
+
+            # Affichage des éléments visibles uniquement
+            for i in range(min(len(items), max_visible)):
+                idx = i + scroll_offset
+                if idx >= len(items): break
+                
+                item = items[idx]
+                y_pos = 5 + i
+                
+                if idx == sel:
+                    stdscr.addstr(y_pos, 6, f"> {item}", curses.color_pair(3) | curses.A_BOLD)
+                else:
+                    attr = curses.color_pair(2) if item.endswith('/') or item == ".." else curses.color_pair(4)
+                    stdscr.addstr(y_pos, 6, f"  {item}", attr)
+
+        stdscr.addstr(h-2, 4, get_str("menu_help"), curses.A_DIM | curses.color_pair(4))
+        
         k = stdscr.getch()
+        
         if k == curses.KEY_UP:
-            if files:
-                sel = (sel - 1) % len(files)
+            if items: sel = (sel - 1) % len(items)
         elif k == curses.KEY_DOWN:
-            if files:
-                sel = (sel + 1) % len(files)
-        elif k == 10 and files:
-            run_fiche(stdscr, files[sel])
-            stdscr.clear()
-            stdscr.refresh()
+            if items: sel = (sel + 1) % len(items)
+        elif k == 10 and items:
+            target = items[sel]
+            
+            # Logique de navigation
+            if target == "..":
+                current_path = os.path.dirname(current_path)
+                items = get_dir_content(current_path, root_dir)
+                sel = 0
+                scroll_offset = 0
+            elif target.endswith("/"):
+                current_path = os.path.join(current_path, target[:-1])
+                items = get_dir_content(current_path, root_dir)
+                sel = 0
+                scroll_offset = 0
+            else:
+                # C'est un fichier, on lance !
+                run_fiche(stdscr, os.path.join(current_path, target))
+                stdscr.clear()
+                stdscr.refresh()
+                
         elif k in [ord('r'), ord('R')]:
-            files = scan_files()
+            items = get_dir_content(current_path, root_dir)
             sel = 0
+            scroll_offset = 0
         elif k in [ord('s'), ord('S')]:
             settings_menu(stdscr)
             apply_theme()
-        elif k in [ord('c'), ord('C')] and files:
-            stdscr.clear()
-            sf = files[sel].rsplit('.', 1)[0] + "_scoreboard.txt"
-            if os.path.exists(sf):
-                with open(sf, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
-                for i, line in enumerate(lines[-15:]):
-                    stdscr.addstr(2 + i, 2, line.strip(), curses.color_pair(4))
-            else:
-                stdscr.addstr(2, 2, get_str("empty_scoreboard"), curses.color_pair(4))
-            stdscr.getch()
+        elif k in [ord('c'), ord('C')] and items:
+            if not items[sel].endswith('/'):
+                stdscr.clear()
+                sf = os.path.join(current_path, items[sel].rsplit('.', 1)[0] + "_scoreboard.txt")
+                if os.path.exists(sf):
+                    with open(sf, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                    for i, line in enumerate(lines[-15:]):
+                        stdscr.addstr(2 + i, 2, line.strip()[:w-4], curses.color_pair(4))
+                else:
+                    stdscr.addstr(2, 2, get_str("empty_scoreboard"), curses.color_pair(4))
+                stdscr.getch()
         elif k in [ord('q'), ord('Q')]:
             break
-
 if __name__ == "__main__":
     curses.wrapper(main_menu)
