@@ -6,9 +6,10 @@ import webbrowser
 import random
 import json
 import re
+import sys
 from datetime import datetime
 
-# --- CONFIGURATION ET SAUVEGARDE ---
+
 CONFIG_FILE = ".settings.config"
 SETTINGS = {
     "username": "User",
@@ -31,10 +32,34 @@ def load_settings():
         except:
             pass
 
-# --- PHRASES ET TEXTES ---
-NEXT_PHRASES = ["Ouep", "Yep", "Okay", "D'accord", "Uh huh?", "C'est noté", "Suivant", "Allez !"]
+def check_terminal_size(stdscr):
+    MIN_LINES = 20
+    MIN_COLS = 70
+    while True:
+        h, w = stdscr.getmaxyx()
+        if h >= MIN_LINES and w >= MIN_COLS:
+            return
+        stdscr.clear()
+        msg1 = f"Window is too smol !"
+        msg2 = f"Current : {w}  x {h} l"
+        msg3 = f"Min: {MIN_COLS} x {MIN_LINES} l"
+        msg4 = "Resize and press any key"
+        msg5 = "Or press Q to leave"
+        stdscr.addstr(h//2 - 2, max(0, (w - len(msg1))//2), msg1, curses.A_BOLD)
+        stdscr.addstr(h//2, max(0, (w - len(msg2))//2), msg2)
+        stdscr.addstr(h//2 + 1, max(0, (w - len(msg3))//2), msg3)
+        stdscr.addstr(h//2 + 3, max(0, (w - len(msg4))//2), msg4)
+        stdscr.addstr(h//2 + 4, max(0, (w - len(msg5))//2), msg5)
+        stdscr.refresh()
+        k = stdscr.getch()
+        if k in (ord('q'), ord('Q')):
+            sys.exit(0)
 
-# Personnages et leurs phrases personnalisées
+
+# ---  STUFF  ---
+NEXT_PHRASES = ["Ouep", "Yep", "Okay", "D'accord", "Uh huh", "C'est noté", "Suivant", "On continue"]
+
+# chars
 CHARACTER_PHRASES = {
     "Default": {
         "PERFECT": ["C'était divin...", "Un sans-faute magistral...", "C'est... l'excellence incarnée.", "Les profs pleurent de joie."],
@@ -350,8 +375,8 @@ def apply_theme():
     curses.init_pair(2, accent, bg)
     curses.init_pair(3, select_fg, select_bg)
 
-# --- RENDU MARKDOWN ---
 def add_markdown_str(stdscr, y, x, text):
+    """Affiche du texte markdown avec retour à la ligne automatique."""
     title_match = re.match(r'^(#{1,6})\s+(.*)', text)
     if title_match:
         text = title_match.group(2)
@@ -361,21 +386,64 @@ def add_markdown_str(stdscr, y, x, text):
         base_pair = curses.color_pair(1)
         base_attr = 0
 
+    h, w = stdscr.getmaxyx()
+    if y >= h - 1:
+        return y  # no space :c
     parts = re.split(r'(\*\*|_|`)', text)
     curr_attr = curses.A_NORMAL
-    pos_x = x
+    line_x = x
+    line_y = y
     for part in parts:
         if part == '**':
             curr_attr ^= curses.A_BOLD
+            continue
         elif part == '_':
             curr_attr ^= curses.A_ITALIC if hasattr(curses, 'A_ITALIC') else curses.A_UNDERLINE
+            continue
         elif part == '`':
             curr_attr ^= curses.A_REVERSE
-        elif part:
-            stdscr.addstr(y, pos_x, part, curr_attr | base_attr | base_pair)
-            pos_x += len(part)
+            continue
+        elif not part:
+            continue
 
-# --- PARSEUR ---
+        words = part.split(' ')
+        for i, word in enumerate(words):
+            prefix = ' ' if (line_x > x or i > 0) else ''
+            word_width = len(prefix) + len(word)
+            if word_width > w - x:
+                available = w - line_x - len(prefix)
+                if available > 0:
+                    word = word[:available]
+                    word_width = len(prefix) + len(word)
+                else:
+                    line_y += 1
+                    line_x = x
+                    if line_y >= h - 1:
+                        return line_y
+                    prefix = ''
+                    word_width = len(word)
+
+            if line_x + word_width >= w:
+                line_y += 1
+                line_x = x
+                if line_y >= h - 1:
+                    return line_y
+                prefix = ''  # on est en début de ligne
+            try:
+                if prefix:
+                    stdscr.addstr(line_y, line_x, prefix, curr_attr | base_attr | base_pair)
+                    line_x += len(prefix)
+                stdscr.addstr(line_y, line_x, word, curr_attr | base_attr | base_pair)
+                line_x += len(word)
+            except curses.error:
+                pass
+
+
+
+    return line_y + 1  # prochaine ligne disponible
+
+
+# --- PARSE ---
 def parse_fiche(filepath):
     pages = []
     current_page = None
@@ -431,7 +499,7 @@ def parse_fiche(filepath):
         pages.append(current_page)
     return pages
 
-# --- ÉCRAN D'ACCUEIL ---
+# --- MM ---
 def draw_ascii_title(stdscr):
     h, w = stdscr.getmaxyx()
     art = [r"   _________       __         .__   ",r"  /   _____/ ____ |  | ____ __|  |  ",r"  \_____  \ /  _ \|  |/ /  |  \  |  ",r"  /        (  <_> )    <|  |  /  |__",r" /_______  /\____/|__|_ \____/|____/",r"         \/            \/           "]
@@ -445,7 +513,7 @@ def draw_ascii_title(stdscr):
     while stdscr.getch() != 10:
         pass
 
-# --- MENU PARAMÈTRES ---
+# --- MS ---
 def settings_menu(stdscr):
     idx = 0
     options = ["username", "lang", "images_enabled", "terminer_mode", "theme", "character"]
@@ -511,7 +579,7 @@ def settings_menu(stdscr):
             break
     save_settings()
 
-# --- LECTURE D'UNE FICHE ---
+# --- fah ---
 def run_fiche(stdscr, filepath):
     pages = parse_fiche(filepath)
     if not pages:
@@ -576,21 +644,18 @@ def run_fiche(stdscr, filepath):
                     f.write(f"{datetime.now().strftime('%d/%m %H:%M')} | {SETTINGS['username']} | {score}/{total} | {elapsed}s\n")
             stdscr.getch()
             break
-
-        # Affichage d'une page
+        # Affichage d'une page???
         page = pages[curr]
         stdscr.addstr(2, 2, f"{page['title']} ({curr+1}/{len(pages)})", curses.A_BOLD | curses.color_pair(2))
         y = 4
         for typ, content in page["elements"]:
             if typ == "text":
-                add_markdown_str(stdscr, y, 4, content)
-                y += 2
+                y = add_markdown_str(stdscr, y, 4, content) + 1  # +1 pour espacement sinon cé kaka
             elif typ == "image" and SETTINGS["images_enabled"]:
                 stdscr.addstr(y, 4, f"[ IMAGE : {content} - Touche 'I' ]", curses.color_pair(2))
                 y += 2
             elif typ == "subtext":
-                add_markdown_str(stdscr, y-1, 6, f"~ {content}")
-                y += 1
+                y = add_markdown_str(stdscr, y, 6, f"~ {content}") + 1
 
         if page["type"] in ["tf", "mcq"]:
             for i, opt in enumerate(page["options"]):
@@ -630,12 +695,13 @@ def run_fiche(stdscr, filepath):
             elif k == curses.KEY_DOWN:
                 page["user_answer"] = min(len(page["options"]) - 1, page["user_answer"] + 1)
 
-# --- MENU PRINCIPAL ---
+# --- MM AGAIN ---
 def main_menu(stdscr):
     load_settings()
     curses.curs_set(0)
     curses.start_color()
     apply_theme()
+    check_terminal_size(stdscr)
     draw_ascii_title(stdscr)
 
     def scan_files():
@@ -643,6 +709,8 @@ def main_menu(stdscr):
 
     files = scan_files()
     sel = 0
+
+
 
     while True:
         stdscr.bkgd(' ', curses.color_pair(1))
