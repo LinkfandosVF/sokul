@@ -133,6 +133,10 @@ STRINGS = {
         "opt_them": "Thème",
         "opt_char": "Personnage",
         "fiche_help": "[←] Précédent  [→/Entrée] Suivant  [↑/↓] Choisir  [I] Image  [Q] Quitter",
+        "rank_perfect": "PARFAIT !",
+        "rank_good": "Superbe !",
+        "rank_ok": "Mais c'est juste OK.",
+        "rank_bad": "Essaie encore...",
     },
     "EN": {
         "welcome": "Hello {}! Press [ENTER].",
@@ -153,6 +157,10 @@ STRINGS = {
         "opt_them": "Theme",
         "opt_char": "Character",
         "fiche_help": "[←] Previous  [→/Enter] Next  [↑/↓] Choose  [I] Image  [Q] Quit",
+        "rank_perfect": "PERFECT!",
+        "rank_good": "Superb!",
+        "rank_ok": "But it's just OK.",
+        "rank_bad": "Try Again...",
     }
 }
 
@@ -500,7 +508,7 @@ def parse_fiche(filepath):
 
 def draw_ascii_title(stdscr):
     h, w = stdscr.getmaxyx()
-    art = [r"   _________       __         .__   ",r"  /   _____/ ____ |  | ____ __|  |  ",r"  \_____  \ /  _ \|  |/ /  |  \  |  ",r"  /        (  <_> )    <|  |  /  |__",r" /_______  /\____/|__|_ \____/|____/",r"         \/            \/           "]
+    art = [r"    _________       __         .__   ",r"  /   _____/ ____ |  | ____ __|  |  ",r"  \_____  \ /  _ \|  |/ /  |  \  |  ",r"  /        (  <_> )    <|  |  /  |__",r" /_______  /\____/|__|_ \____/|____/",r"         \/            \/            "]
     stdscr.clear()
     for i, line in enumerate(art):
         if h > 15:
@@ -618,17 +626,18 @@ def run_fiche(stdscr, filepath):
             elapsed = round(time.time() - start_time)
             ratio = score / total if total > 0 else 1.0
             
+            # --- CALCUL DES RANGS ---
             if ratio == 1.0:
-                rank_display = "PARFAIT!"
+                rank_display = get_str("rank_perfect")
                 rank_key = "PERFECT"
             elif ratio >= 0.8:
-                rank_display = "Bien!"
+                rank_display = get_str("rank_good")
                 rank_key = "GOOD"
             elif ratio >= 0.5:
-                rank_display = "OK."
+                rank_display = get_str("rank_ok")
                 rank_key = "OK"
             else:
-                rank_display = "Essaie encore..."
+                rank_display = get_str("rank_bad")
                 rank_key = "BAD"
             
             char_phrases = CHARACTER_PHRASES.get(SETTINGS["character"], CHARACTER_PHRASES["Default"])
@@ -640,7 +649,7 @@ def run_fiche(stdscr, filepath):
             stdscr.addstr(7, 7, f"TIME  : {elapsed} secondes", curses.color_pair(4))
             stdscr.addstr(9, 7, f"NOTES :", curses.A_DIM | curses.color_pair(4))
             stdscr.addstr(10, 9, f"\"{judge_sentence}\"", curses.A_ITALIC | curses.color_pair(2))
-            stdscr.addstr(12, 7, f"RANG   : {rank_display}", curses.color_pair(3) | curses.A_BOLD)
+            stdscr.addstr(12, 7, f"* {rank_display}", curses.color_pair(3) | curses.A_BOLD)
             if total > 0:
                 sf = filepath.rsplit('.', 1)[0] + "_scoreboard.txt"
                 with open(sf, 'a', encoding='utf-8') as f:
