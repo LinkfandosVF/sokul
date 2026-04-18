@@ -9,7 +9,6 @@ import re
 import sys
 from datetime import datetime
 
-
 CONFIG_FILE = ".settings.config"
 SETTINGS = {
     "username": "User",
@@ -55,11 +54,8 @@ def check_terminal_size(stdscr):
         if k in (ord('q'), ord('Q')):
             sys.exit(0)
 
-
-# ---  STUFF  ---
 NEXT_PHRASES = ["Ouep", "Yep", "Okay", "D'accord", "Uh huh", "C'est noté", "Suivant", "On continue"]
 
-# chars
 CHARACTER_PHRASES = {
     "Default": {
         "PERFECT": ["C'était divin...", "Un sans-faute magistral...", "C'est... l'excellence incarnée.", "Les profs pleurent de joie."],
@@ -164,7 +160,6 @@ def get_str(key, *args):
     lang_dict = STRINGS.get(SETTINGS["lang"], STRINGS["FR"])
     return lang_dict.get(key, key).format(*args)
 
-# --- SYSTÈME DE THÈMES ---
 THEMES_DIR = "themes"
 
 BUILTIN_THEMES = {
@@ -184,12 +179,13 @@ BUILTIN_THEMES = {
         "custom": {12: (0, 0, 130), 13: (0, 1000, 1000)}
     },
     "TRANS RIGHTS!": {
-        "fg": curses.COLOR_WHITE,
+        "fg": curses.COLOR_CYAN,
         "bg": curses.COLOR_BLACK,
-        "accent": 11,
+        "accent": curses.COLOR_CYAN,
         "select_bg": 11,
         "select_fg": curses.COLOR_BLACK,
-        "custom": {10: (356, 807, 980), 11: (960, 662, 721)}
+        "custom": {10: (356, 807, 980), 11: (960, 662, 721)},
+        "text_fg": 7
     },
     "NATURE": {
         "fg": curses.COLOR_GREEN,
@@ -256,7 +252,7 @@ BUILTIN_THEMES = {
         "accent": curses.COLOR_WHITE,
         "select_bg": curses.COLOR_BLACK,
         "select_fg": curses.COLOR_CYAN,
-        "custom": {16: (400, 800, 1000)}
+        "custom": {16: (84, 120, 255)}
     },
     "OZ": {
         "fg": curses.COLOR_YELLOW,
@@ -271,7 +267,8 @@ BUILTIN_THEMES = {
         "accent": curses.COLOR_GREEN,
         "select_bg": curses.COLOR_BLACK,
         "select_fg": 47,
-        "custom": {17: (600, 1000, 600)}
+        "custom": {17: (600, 1000, 600)},
+        "text_fg": 0
     },
     "APRIL": {
         "fg": curses.COLOR_WHITE,
@@ -290,7 +287,7 @@ BUILTIN_THEMES = {
         "custom": {21: (800, 200, 100)}
     },
     "STU": {
-        "fg": curses.COLOR_YELLOW,
+        "fg": curses.COLOR_WHITE,
         "bg": 22,
         "accent": curses.COLOR_GREEN,
         "select_bg": curses.COLOR_GREEN,
@@ -303,7 +300,7 @@ BUILTIN_THEMES = {
         "accent": curses.COLOR_WHITE,
         "select_bg": curses.COLOR_WHITE,
         "select_fg": curses.COLOR_BLACK,
-        "custom": {23: (800, 500, 200)}
+        "custom": {23: (183, 116, 102)}
     },
     "OMEN": {
         "fg": curses.COLOR_WHITE,
@@ -366,29 +363,35 @@ def apply_theme():
     _, all_themes = get_all_themes()
     theme = all_themes.get(theme_name, BUILTIN_THEMES["DEFAULT"])
     init_custom_colors(theme)
+    
     bg = theme.get("bg", curses.COLOR_BLACK)
     fg = theme.get("fg", curses.COLOR_WHITE)
     accent = theme.get("accent", curses.COLOR_CYAN)
     select_bg = theme.get("select_bg", curses.COLOR_CYAN)
     select_fg = theme.get("select_fg", curses.COLOR_BLACK)
+
+    text_fg = theme.get("text_fg", curses.COLOR_WHITE)
+    
     curses.init_pair(1, fg, bg)
     curses.init_pair(2, accent, bg)
     curses.init_pair(3, select_fg, select_bg)
+    curses.init_pair(4, text_fg, bg)
 
-def add_markdown_str(stdscr, y, x, text):
-    """Affiche du texte markdown avec retour à la ligne automatique."""
+def add_markdown_str(stdscr, y, x, text, text_pair=None):
+    if text_pair is None:
+        text_pair = curses.color_pair(4)
     title_match = re.match(r'^(#{1,6})\s+(.*)', text)
     if title_match:
         text = title_match.group(2)
         base_pair = curses.color_pair(2)
         base_attr = curses.A_BOLD
     else:
-        base_pair = curses.color_pair(1)
+        base_pair = text_pair
         base_attr = 0
 
     h, w = stdscr.getmaxyx()
     if y >= h - 1:
-        return y  # no space :c
+        return y
     parts = re.split(r'(\*\*|_|`)', text)
     curr_attr = curses.A_NORMAL
     line_x = x
@@ -428,7 +431,7 @@ def add_markdown_str(stdscr, y, x, text):
                 line_x = x
                 if line_y >= h - 1:
                     return line_y
-                prefix = ''  # on est en début de ligne
+                prefix = ''
             try:
                 if prefix:
                     stdscr.addstr(line_y, line_x, prefix, curr_attr | base_attr | base_pair)
@@ -438,12 +441,8 @@ def add_markdown_str(stdscr, y, x, text):
             except curses.error:
                 pass
 
+    return line_y + 1
 
-
-    return line_y + 1  # prochaine ligne disponible
-
-
-# --- PARSE ---
 def parse_fiche(filepath):
     pages = []
     current_page = None
@@ -499,7 +498,6 @@ def parse_fiche(filepath):
         pages.append(current_page)
     return pages
 
-# --- MM ---
 def draw_ascii_title(stdscr):
     h, w = stdscr.getmaxyx()
     art = [r"   _________       __         .__   ",r"  /   _____/ ____ |  | ____ __|  |  ",r"  \_____  \ /  _ \|  |/ /  |  \  |  ",r"  /        (  <_> )    <|  |  /  |__",r" /_______  /\____/|__|_ \____/|____/",r"         \/            \/           "]
@@ -513,7 +511,6 @@ def draw_ascii_title(stdscr):
     while stdscr.getch() != 10:
         pass
 
-# --- MS ---
 def settings_menu(stdscr):
     idx = 0
     options = ["username", "lang", "images_enabled", "terminer_mode", "theme", "character"]
@@ -534,9 +531,9 @@ def settings_menu(stdscr):
                 val = "ON" if val else "OFF"
             text = f"{label} : < {val} >"
             if i == idx:
-                stdscr.addstr(5+i, 6, f"> {text}", curses.A_REVERSE)
+                stdscr.addstr(5+i, 6, f"> {text}", curses.color_pair(3) | curses.A_BOLD)
             else:
-                stdscr.addstr(5+i, 6, f"  {text}")
+                stdscr.addstr(5+i, 6, f"  {text}", curses.color_pair(4))
         stdscr.addstr(15, 4, get_str("settings_help"), curses.A_DIM)
         k = stdscr.getch()
         if k == curses.KEY_UP:
@@ -579,7 +576,6 @@ def settings_menu(stdscr):
             break
     save_settings()
 
-# --- fah ---
 def run_fiche(stdscr, filepath):
     pages = parse_fiche(filepath)
     if not pages:
@@ -590,18 +586,22 @@ def run_fiche(stdscr, filepath):
 
     while curr <= len(pages):
         stdscr.clear()
-        # Écran de fin
         if curr == len(pages):
             if SETTINGS["terminer_mode"] == "NEVER":
                 break
             if SETTINGS["terminer_mode"] == "ASK":
-                stdscr.addstr(5, 5, get_str("submit_results"), curses.A_BOLD)
+                stdscr.addstr(5, 5, get_str("submit_results"), curses.A_BOLD | curses.color_pair(2))
                 opts = [get_str("yes"), get_str("no")]
                 sel = 0
                 while True:
                     for i, o in enumerate(opts):
-                        attr = curses.A_REVERSE if i == sel else 0
-                        stdscr.addstr(7+i, 7, f"> {o}" if i == sel else f"  {o}", attr)
+                        if i == sel:
+                            attr = curses.color_pair(3) | curses.A_BOLD
+                            prefix = "▶ "
+                        else:
+                            attr = curses.color_pair(4)
+                            prefix = "  "
+                        stdscr.addstr(7+i, 7, f"{prefix}{o}", attr)
                     k = stdscr.getch()
                     if k == curses.KEY_UP:
                         sel = 0
@@ -612,50 +612,52 @@ def run_fiche(stdscr, filepath):
                 if sel == 1:
                     curr -= 1
                     continue
-            # Calcul du score
             qs = [p for p in pages if p["type"] in ["tf", "mcq"]]
             score = sum(1 for p in qs if p["user_answer"] == p["correct"])
             total = len(qs)
             elapsed = round(time.time() - start_time)
             ratio = score / total if total > 0 else 1.0
-            if ratio == 1.0:
-                rank = "PERFECT"
-            elif ratio >= 0.8:
-                rank = "GOOD"
-            elif ratio >= 0.5:
-                rank = "OK"
-            else:
-                rank = "BAD"
             
-            # Choisir les phrases du personnage
+            if ratio == 1.0:
+                rank_display = "PARFAIT!"
+                rank_key = "PERFECT"
+            elif ratio >= 0.8:
+                rank_display = "Bien!"
+                rank_key = "GOOD"
+            elif ratio >= 0.5:
+                rank_display = "OK."
+                rank_key = "OK"
+            else:
+                rank_display = "Essaie encore..."
+                rank_key = "BAD"
+            
             char_phrases = CHARACTER_PHRASES.get(SETTINGS["character"], CHARACTER_PHRASES["Default"])
-            judge_sentence = random.choice(char_phrases[rank])
+            judge_sentence = random.choice(char_phrases[rank_key])
             
             stdscr.clear()
             stdscr.addstr(3, 5, f"--- RESULTS : {os.path.basename(filepath)} ---", curses.A_BOLD | curses.color_pair(2))
-            stdscr.addstr(6, 7, f"SCORE  : {score} / {total}", curses.A_BOLD)
-            stdscr.addstr(7, 7, f"TIME  : {elapsed} secondes")
-            stdscr.addstr(9, 7, f"NOTES :", curses.A_DIM)
+            stdscr.addstr(6, 7, f"SCORE  : {score} / {total}", curses.A_BOLD | curses.color_pair(4))
+            stdscr.addstr(7, 7, f"TIME  : {elapsed} secondes", curses.color_pair(4))
+            stdscr.addstr(9, 7, f"NOTES :", curses.A_DIM | curses.color_pair(4))
             stdscr.addstr(10, 9, f"\"{judge_sentence}\"", curses.A_ITALIC | curses.color_pair(2))
-            stdscr.addstr(12, 7, f"RANG   : {rank}", curses.A_REVERSE)
+            stdscr.addstr(12, 7, f"RANG   : {rank_display}", curses.color_pair(3) | curses.A_BOLD)
             if total > 0:
                 sf = filepath.rsplit('.', 1)[0] + "_scoreboard.txt"
                 with open(sf, 'a', encoding='utf-8') as f:
                     f.write(f"{datetime.now().strftime('%d/%m %H:%M')} | {SETTINGS['username']} | {score}/{total} | {elapsed}s\n")
             stdscr.getch()
             break
-        # Affichage d'une page???
         page = pages[curr]
         stdscr.addstr(2, 2, f"{page['title']} ({curr+1}/{len(pages)})", curses.A_BOLD | curses.color_pair(2))
         y = 4
         for typ, content in page["elements"]:
             if typ == "text":
-                y = add_markdown_str(stdscr, y, 4, content) + 1  # +1 pour espacement sinon cé kaka
+                y = add_markdown_str(stdscr, y, 4, content, curses.color_pair(4)) + 1
             elif typ == "image" and SETTINGS["images_enabled"]:
                 stdscr.addstr(y, 4, f"[ IMAGE : {content} - Touche 'I' ]", curses.color_pair(2))
                 y += 2
             elif typ == "subtext":
-                y = add_markdown_str(stdscr, y, 6, f"~ {content}") + 1
+                y = add_markdown_str(stdscr, y, 6, f"~ {content}", curses.color_pair(4)) + 1
 
         if page["type"] in ["tf", "mcq"]:
             for i, opt in enumerate(page["options"]):
@@ -663,18 +665,17 @@ def run_fiche(stdscr, filepath):
                     attr = curses.color_pair(3) | curses.A_BOLD
                     prefix = "▶ "
                 else:
-                    attr = curses.color_pair(1)
+                    attr = curses.color_pair(4)
                     prefix = "  "
                 stdscr.addstr(y + i, 6, f"{prefix}{opt}", attr)
             y += len(page["options"]) + 1
         else:
-            stdscr.addstr(y + 1, 4, f"[ {random_phrase} ]", curses.A_REVERSE)
+            stdscr.addstr(y + 1, 4, f"[ {random_phrase} ]", curses.color_pair(3) | curses.A_BOLD)
 
-        # Barre d'aide
         help_text = get_str("fiche_help")
         h, w = stdscr.getmaxyx()
         if h > 2:
-            stdscr.addstr(h-2, 2, help_text, curses.A_DIM)
+            stdscr.addstr(h-2, 2, help_text, curses.A_DIM | curses.color_pair(4))
 
         k = stdscr.getch()
         if k in [ord('q'), ord('Q')]:
@@ -695,7 +696,6 @@ def run_fiche(stdscr, filepath):
             elif k == curses.KEY_DOWN:
                 page["user_answer"] = min(len(page["options"]) - 1, page["user_answer"] + 1)
 
-# --- MM AGAIN ---
 def main_menu(stdscr):
     load_settings()
     curses.curs_set(0)
@@ -710,20 +710,18 @@ def main_menu(stdscr):
     files = scan_files()
     sel = 0
 
-
-
     while True:
         stdscr.bkgd(' ', curses.color_pair(1))
         stdscr.clear()
         stdscr.addstr(2, 4, get_str("menu_title"), curses.A_BOLD | curses.color_pair(2))
         if not files:
-            stdscr.addstr(5, 6, get_str("no_files"))
+            stdscr.addstr(5, 6, get_str("no_files"), curses.color_pair(4))
         for i, f in enumerate(files):
             if i == sel:
-                stdscr.addstr(5 + i, 6, f"> {f}", curses.A_REVERSE)
+                stdscr.addstr(5 + i, 6, f"> {f}", curses.color_pair(3) | curses.A_BOLD)
             else:
-                stdscr.addstr(5 + i, 6, f"  {f}")
-        stdscr.addstr(curses.LINES-2, 4, get_str("menu_help"), curses.A_DIM)
+                stdscr.addstr(5 + i, 6, f"  {f}", curses.color_pair(4))
+        stdscr.addstr(curses.LINES-2, 4, get_str("menu_help"), curses.A_DIM | curses.color_pair(4))
         k = stdscr.getch()
         if k == curses.KEY_UP:
             if files:
@@ -748,9 +746,9 @@ def main_menu(stdscr):
                 with open(sf, 'r', encoding='utf-8') as f:
                     lines = f.readlines()
                 for i, line in enumerate(lines[-15:]):
-                    stdscr.addstr(2 + i, 2, line.strip())
+                    stdscr.addstr(2 + i, 2, line.strip(), curses.color_pair(4))
             else:
-                stdscr.addstr(2, 2, get_str("empty_scoreboard"))
+                stdscr.addstr(2, 2, get_str("empty_scoreboard"), curses.color_pair(4))
             stdscr.getch()
         elif k in [ord('q'), ord('Q')]:
             break
